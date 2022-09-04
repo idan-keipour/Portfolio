@@ -1,0 +1,31 @@
+idank
+315355537
+Idan Keipour
+
+for ex4  I used  stackoverflow and wikibooks in the value "python"".
+ 
+=============================
+= README for ex4:   =
+=============================
+
+
+Description: 
+
+The exercise is to make an automatic solution to a sudoku board and to enable a game for the user.
+
+Expansion:
+1) checks if the board is complete
+2) Return the 3*3 square of a given sudoku coordinate
+3) Get available options of a given sudoku coordinate
+4) find all positions on the board which have one option to fill
+5) Find positions with no option to fill
+6) checks if a value can be added to the board
+7) Iteratively fill the board
+
+
+
+======================
+=  Special Comments  =
+======================
+1.
+
