@@ -1,4 +1,5 @@
 The course teaches modern data analysis methods in statistics, especially for large-scale and high-dimensional data. We have used many ML algorithms for prediction, classification, image processing, decision making and more.
+
 A link to the html files of the labs can be seen here:
 
 
