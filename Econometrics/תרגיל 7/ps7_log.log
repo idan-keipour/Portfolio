@@ -1,0 +1,25 @@
+----------------------------------------------------------------------------------------------------------------------------------------------------------
+      name:  <unnamed>
+       log:  C:\Users\idank\לימודים\שנה ב\אקונומטריקה\תרגיל 7\ps7_log.log
+  log type:  text
+ opened on:  19 Dec 2020, 20:37:53
+
+. 
+. 
+. /* 
+> idan keipour 
+> 315355537
+> EX7
+> */
+. 
+. use "HPRICES.dta", clear                // open a Stata data file"
+
+. reg lprice= log(price)
+invalid syntax
+r(198);
+
+end of do-file
+
+r(198);
+
+. exit, clear
