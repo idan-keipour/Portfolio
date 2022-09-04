@@ -1,0 +1,289 @@
+---
+title: "52414 - lab 1"
+author: "52414"
+date: "25/5/2021"
+output: html_document
+---
+
+# *Lab 1: Basic Data Wrangling and Plotting*  
+<br/><br/>  
+  
+
+<br/><br/>
+```{r, include=FALSE}
+library(tidyverse) # This includes dplyr, stringr, ggplot2, .. 
+library(data.table)
+
+```  
+<br/><br/>
+  
+  
+1. first we want to load the date to a variable calles owid_covid_data.
+then we change the class of the date to "Date". 
+
+```{r}
+setwd("C:/Users/idank/OneDrive/R/Data Analysis with R/52414-2021-lab-1-keipour_idan_and_frankowitz_yosef-master")
+file <- read.csv("owid-covid-data.csv")
+file$date<-as.Date(file$date)
+class(file$date)
+```
+We can see that the class is correct.
+
+2. For the requested columns we would like to filter the data file so that the values are complete, select the most recent date and display only the relevant columns for the top five countries.
+
+```{r}
+file %>% filter(total_cases_per_million>0) %>%  filter(date== max(date)) %>% select(location,total_cases_per_million,date) %>% top_n(5,total_cases_per_million)
+
+file %>% filter(total_deaths_per_million>0) %>% filter(date== max(date)) %>% select(location,total_deaths_per_million,date) %>% top_n(5,total_deaths_per_million)
+
+file %>% filter(total_vaccinations_per_hundred>0) %>% filter(date== max(date)) %>% top_n(5,total_vaccinations_per_hundred) %>% select(location,total_vaccinations_per_hundred,date)
+```
+As we would expect, it can be seen that there is an overlap between the countries where the number of patients per capita is highest and the countries where the number of deaths per capita is highest.
+In addition, none of the countries where the percentage of vaccines is high is in the other tables.
+
+
+3. We would like to build a function that displays the progress of the values in the requested column for each continent in a visually convenient way. We did appropriate filtering on the data frame so that only the six continents would be displayed and in addition there would be no missing values that would affect the graph.
+
+```{r}
+func =function(df,colum){
+  temp_df <- df %>% filter(location=='Africa' | location == 'Asia' |location == 'Europe' |location == 'North America'
+                         |location == 'Oceania' |location == 'South America') %>% drop_na(all_of(colum))
+  ggplot(data = temp_df,aes(y=temp_df[[colum]],x=date,color=location))+geom_line()+xlab("date")+ylab(colum)+theme_grey()
+}
+```
+```{r}
+func(file,"new_cases")
+file <- mutate(file,log_new_cases_smoothed = log(file$new_cases_smoothed))
+file <- file %>% filter(is.finite(log_new_cases_smoothed))
+func(file,"log_new_cases_smoothed")
+```
+```{r}
+```
+Comparing the two graphs it can be seen that it is much easier to interpret the graph of the log of the smoothed number of new cases.
+This is because the log function causes a minority in the oscillations of the graph and therefore makes it easier to read and analyze the trends presented in the data over time.
+```{r}
+
+file <- mutate(file,log_of_new_deaths =log(file$new_deaths_smoothed))
+file <- file %>% filter(is.finite(log_of_new_deaths))
+func(file,"log_of_new_deaths")
+
+file <- mutate(file,log_of_new_vaccined =log(file$new_vaccinations_smoothed))
+file <- file %>% filter(is.finite(log_of_new_vaccined))
+func(file,"log_of_new_vaccined")
+```
+```{r}
+```
+It can be seen that with the start of vaccinations in January 2021 there is a decrease in the number of deaths mostly in Europe (where the vaccination rate is highest) and in Africa.
+It can be seen that for most continents the increase in the amount of vaccines (around the beginning of January 2021) has led to a decrease in the number of deaths on the continent. At the same time, the number of deaths in Asia is rising in about March, dispite the number of vaccines has increased. This may be due to the fact that the effect of the vaccines was not yet maximal and in addition their amount was not large enough in relation to the number of population.
+
+4.To fill in the relevant column we aggregated the data in relation to the date and continent. In this way we calculated for each continent the sum of the column for all the countries in that continent. We then marged the information in the appropriate place in the data frame.
+
+```{r}
+file <- read.csv("owid-covid-data.csv")
+file$date<-as.Date(file$date)
+
+comp=function(df,colname){
+  corona<- df %>%  filter(location!='Asia' & location!= 'Africa'& location != 'European Union' & location != 'North America' &
+                             location !='South America'& location != 'World' & location != 'Europe' & location != 'Oceania')
+  new_t<-aggregate(corona[[colname]]~date+continent,corona,FUN = sum)
+  colnames(new_t)<- c("date","location",colname)
+  total <- merge(new_t,df %>%select(-c(colname)),all.x = T)
+  a<-df%>%filter((location %in% continent)==F)
+  a<-rbind(a,total)
+  return(a)
+}
+fill_df <- comp(file,"new_tests_smoothed")
+fill_df <- mutate(fill_df,log_of_new_tests_smoothed = log(fill_df$new_tests_smoothed))
+fill_df <- fill_df %>% filter(is.finite(log_of_new_tests_smoothed))
+func(fill_df,"log_of_new_tests_smoothed")
+```
+```{r}
+```
+We filled in the data frame in the column of "new_tests_smoothed", calculated the log and displayed the value over time using the function of section 3.
+From the result it can be seen that in all continents there is a significant increase in the amount of tests as time goes on
+
+
+5. in this question we built data frame with the current total_cases_per_million ,total_deaths_per_million,by aggragate the max total we ad the location
+and then plot total_cases_per_million against total_deaths_per_million with dots and linear reggresion.
+
+```{r}
+covid<-file %>% select(date,location,total_cases_per_million,total_deaths_per_million,new_cases,new_deaths)%>% 
+  filter(location!='Asia' & location!= 'Africa'& location != 'European Union' & location != 'North America' &
+           location !='South America'& location != 'World' & location != 'Europe' & location != 'Oceania')                                 
+
+cases_country<-aggregate(total_cases_per_million~location,data = covid,FUN = max)
+deaths_country<-aggregate(total_deaths_per_million~location,data = covid,FUN = max)
+
+cases_deaths_country<-full_join(deaths_country,cases_country,by="location" )
+plot(x=cases_deaths_country$total_cases_per_million,y=cases_deaths_country$total_deaths_per_million,xlab = "total_cases_per_million",ylab ="total_deaths_per_million" )
+linear_reggresion = lm(cases_deaths_country$total_deaths_per_million~cases_deaths_country$total_cases_per_million)
+abline(linear_reggresion)
+
+max_new_cases<-aggregate(new_cases~location,data = covid,FUN = max)
+
+max_new_cases_date<-inner_join(max_new_cases,covid, by = c("location","new_cases"))
+
+max_new_cases_1date<-aggregate(date~location, data =max_new_cases_date ,FUN = max )
+
+full<-full_join(cases_deaths_country,max_new_cases_1date,by="location")
+
+max_new_deaths<-aggregate(new_deaths~location,data = covid,FUN = max)
+
+max_new_deaths_date<-inner_join(max_new_deaths,covid, by = c("new_deaths","location"))
+
+max_new_deaths_1date<-aggregate(date~location, data =max_new_deaths_date ,FUN = max )
+full_data<-inner_join(full,max_new_deaths_1date,by="location")
+
+full_data<-data.frame(location=full_data$location,total_deaths_per_million=full_data$total_deaths_per_million,total_cases_per_million=full_data$total_cases_per_million,max_new_cases_1date=full_data$date.x,max_new_deaths_1date=full_data$date.y)
+
+ggplot(full_data,aes(x=max_new_cases_1date,y=max_new_deaths_1date))+geom_point()+geom_smooth(method = "lm",se=FALSE)
+
+
+```
+the slop  in section a is 0.01581773 and it present that for thousand cases of corona we predict the death of almost 16 people. 
+Indeed, there seems to be a linear relationship between the data in chapter b.
+At the same time, there does not seem to be any significance to the regression cutter in section B because these are dates.
+
+
+```{r}
+
+world_covid<-file %>% select(location,date,new_cases,new_deaths,new_vaccinations)%>% filter(location=='World') 
+world_covid$month_year<- format(world_covid$date, "%Y-%m")
+
+monthly<-aggregate(new_cases ~ month_year,data = world_covid,FUN = sum)
+
+ggplot(monthly,aes(x = month_year,y = new_cases) )+
+ggtitle('                         worldwide number of new cases by month')+geom_point()+
+  theme(axis.text.x = element_text(angle = 65, hjust = 1))
+
+monthly<-aggregate(new_deaths ~ month_year,data = world_covid,FUN = sum)
+
+ggplot(monthly,aes(x = month_year,y = new_deaths) )+
+ggtitle('                         worldwide number of new deaths by month')+geom_point()+
+  theme(axis.text.x = element_text(angle = 65, hjust = 1))
+
+monthly<-aggregate(new_vaccinations ~ month_year,data = world_covid,FUN = sum)
+
+ggplot(monthly,aes(x=month_year,y=,new_vaccinations) )+
+ggtitle('                         worldwide number of new vaccinations by month')+geom_point()+
+  theme(axis.text.x = element_text(angle = 65, hjust = 1))
+
+```
+
+
+7. We've added a column called "Death Rate" that represents the chances of a person being diagnosed with Corona virus to die from the disease. For each country (where the information existed) we took the most recent date and presented the frequancy in the histogram. 
+```{r}
+file <- mutate(file,death_rate = total_deaths / total_cases)
+temp_file <- file %>% select(location,death_rate,date) %>% filter(death_rate != "NA")  %>% group_by(location) %>% top_n(1,date)
+hist(temp_file$death_rate, breaks = 50, col = "blue", main = "Frequancy of current death rate")
+```
+```{r}
+```
+It can be seen that the death rate for most countries is between 0.01 and 0.03
+
+
+These are the three countries where the death rate was highest:
+```{r}
+temp_file <- as.data.frame(temp_file)
+top_n(temp_file,3,wt=death_rate) %>% select(location,death_rate) %>% arrange(desc(death_rate))
+```   
+
+
+8. We would like to examine the vaccination strategy in Israel, the UK and the United States.
+To do this we will create a column that describes the relationship between people who have been vaccinated in two doses and people who have been vaccinated in general. If the ratio is high it means that the state adopts a strategy of giving two vaccine doses to each citizen and not giving as many individual vaccine doses to as many citizens as possible. 
+
+```{r}
+file <- mutate(file, two_dose_fraction = people_fully_vaccinated/people_vaccinated)
+temp <- file %>% filter(location == 'Israel' |location =='United Kingdom'|location =='United States') %>% drop_na(two_dose_fraction)
+ggplot(temp,aes_string(y='two_dose_fraction',x='date',color="location"))+
+  geom_line(size=1)+xlab("date")+ylab("two dose fraction")+theme_grey()
+
+```
+```{r}
+```
+Both Israel and the United States have chosen the method of vaccinating all citizens with two doses of vaccine. In contrast, in the UK they were initially vaccinated with 2 vaccine doses, then changed the method and vaccinated with only one vaccine and then they were vaccinated again with two doses.
+
+
+9. We are interested in estimating the time that pases from the moment of illness in Corona to death (in case of not recovering  of course).
+To do this we built a function that calculates the cross-correlation between two columns and thus get the effect of time on the ratio between the two columns. We will use this function towards the "new_cases" and "new_deaths" to analyze how long after the disease has been diagnosed, the death rate also increases.
+
+```{r}
+file <- read.csv("owid-covid-data.csv")
+file$date<-as.Date(file$date)
+
+cros_cor <- function(df,erea,colname1,colname2){
+  clean_df <- df %>% filter(location == erea)
+  last <- max(clean_df$date)
+  early <- min(clean_df$date)
+  ret<- c()
+  for (i in seq(60,0,-1)){
+    delta_y <- seq(early, last-i, by="days")
+    delta_x <- seq(early+i,last, by="days")
+    x <- clean_df %>% filter(date %in% delta_x) %>% select(colname1)
+    y <- clean_df %>% filter(date %in% delta_y) %>% select(colname2)
+    corlation <- cor(x , y, use="pairwise.complete.obs")
+    ret <- c(ret,corlation)
+    }
+  for (i in seq(1,60,1)){
+    delta_x <- seq(early, last-i, by="days")
+    delta_y <- seq(early+i, last, by="days")
+    x <- clean_df %>% filter(date %in% delta_x) %>% select(colname1)
+    y <- clean_df %>% filter(date %in% delta_y) %>% select(colname2)
+    corlation <- cor(x , y, use="pairwise.complete.obs")
+    ret <- c(ret,corlation)
+  }
+  return(ret)
+}
+
+canada_cros_cor <- cros_cor(file, 'Canada','new_cases','new_deaths')
+days <- seq(-60,60,1)  
+plot(days,canada_cros_cor,main = 'correlation between new corona cases \nto death in Canada', ylab = 'Canada - cross correlation', xlab = 'delay days', col='blue')
+
+max_time_delay <- days[which.max(canada_cros_cor)]
+max_time_delay
+```
+It can be seen that the peak of the correlation between the new cases and the new deaths (in Canada) is approximately between the 15th day and the 25th day. Beyond this range the correlation begins to decline (the maximum of the time delay is 17). This fact implies to us that the day on which the chance of dying from corona is highest is the 17th day from the moment of illness.In addition, if a person dies from corona it will probably happen between the 15th and 25th day from the day he falls ill.
+
+10. We want to test the effect of the vaccines and whether they actually lowered the corona cases
+
+```{r}
+corona<-file %>%  filter(location!='Asia' & location!= 'Africa'& location != 'European Union' & location != 'North America' &
+           location !='South America'& location != 'World' & location != 'Europe' & location != 'Oceania')
+
+corona23.4.21<-corona%>%filter(date=="2021-04-23")
+
+corona01.04.21<-corona%>%filter(date=="2021-04-01")
+
+ncs23.4<-corona23.4.21%>%select("location","new_cases_smoothed")
+
+mncm<-aggregate(new_cases_smoothed~location,corona,FUN = max)
+
+tvph01.04<-corona01.04.21%>%select("location","total_vaccinations_per_hundred")
+
+table<-inner_join(ncs23.4,mncm,by="location")
+ 
+table1<-inner_join(table,tvph01.04,by="location")
+
+table2<-data.frame(location=table1$location,log_ratio=log(table1$new_cases_smoothed.x/table1$new_cases_smoothed.y),total_vaccinations_per_hundred=table1$total_vaccinations_per_hundred)
+
+
+plot(x=table2$total_vaccinations_per_hundred,y=table2$log_ratio,main="total vaccinations as function of log ratio",col=ifelse(table2$location=="Israel"|table2$location=="United Kingdom", "red", "black"),pch=ifelse(table2$location=="Israel"|table2$location=="United Kingdom", 19, 1), cex=ifelse(table2$location=="Israel"|table2$location=="United Kingdom", 1.3, 1),xlab = "total_vaccinations_per_hundred",ylab ="log_ratio" )
+text(x=table2$total_vaccinations_per_hundred[c(83,181)], y=table2$log_ratio[c(83,181)], labels=c("Israel","United Kingdom"), pos=1, col="red")
+```
+```{r}
+```
+We see that Israel's vaccine policy (two-dose vaccination) has brought results and has indeed significantly reduced corona cases, in contrast to England where the vaccine in one dose seems less effective.
+In addition it can be noted that there are countries where the patient has not dropped significantly despite the high amount of vaccines. This may be due to the fact that these are less effective vaccines or that the vaccination policy has been unsuccessful.
+
+
+
+
+
+
+
+
+
+
+
+
+
