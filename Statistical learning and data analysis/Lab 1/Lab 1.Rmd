@@ -1,0 +1,362 @@
+---
+title: "Lab 1"
+author: "Menachem Sokolik (314696972) and Idan Keipour (315355537)"
+date: 
+output:
+  html_document:
+    rmarkdown::html_document: 
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    df_print: paged
+    includes: 
+    after_body: footer.html
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+---
+
+```{r, include=FALSE}
+library(imager)
+library(ggplot2) 
+library(reshape2) 
+library(plyr) 
+library(dplyr) 
+library(gplots)
+library(lattice)
+library(caret)
+library(dygraphs)
+library(xts)          # To make the convertion data-frame / xts format
+library(tidyverse)
+library(lubridate)
+library(readxl)
+library(hrbrthemes)
+library(ggplot2)
+library(ggrepel)
+library(ggpubr)
+library(rgl)
+```
+## Question 1: Graph Critique
+
+#### Figure 1:
+```{r fig.align="center", echo = FALSE, cache=TRUE}
+#plot(load.image("C://Users//menac//OneDrive//Desktop//Statistical Learning and Data Analysis//Lab #1//Lab1_Figure1.png"))
+setwd("C:/Users/idank/OneDrive/R/Statistical learning and data analysis/Lab1")
+plot(load.image("C:/Users/idank/OneDrive/R/Statistical learning and data analysis/Lab1/Lab1_Figure1.png"))
+
+```
+
+Graph A describes how many accidents occurred each month between 2013 and 2020 in the Haifa metropolitan area. Each point in the graph expresses the total number of accidents that occurred in that month when the lines connect the points in chronological order (each line connects the 
+previous month and the month following). In addition, the pink horizontal line expresses the average 
+over all the months and the vertical dashed lines separate from year to year.
+
+The graph attempts to describe the evolution of the number of accidents over the years. It tries to 
+answer the question of whether there is a development / trend in the number of accidents over time.
+
+In our eyes, the graph does manage to answer the main question it is trying to answer. We see that 
+over time the number of accidents does not change dramatically. The number of accidents in most months is relatively close to average and does not significantly exceed it. In addition, it can be seen that the graph is volatile and is characterized by many ups and downs over time. This may indicate the randomized factor in the number of accidents that occur each month.
+
+Also, the connecting lines between the months help to discern the degree of change that has 
+occurred in each month relative to the previous month.
+
+At the same time, the graph raises additional questions that are not answered (this is not necessarily 
+a disadvantage of the graph, it cannot present the entire information. Sometimes the benefit may be 
+a flood of questions that will lead to more in-depth research). First it is not clear why drastic changes 
+occur in accidents between one month and the next. An example of this is the drastic change that 
+took place between May and June 2013.
+In addition, it was interesting to see if there are months in the year where there are consistently 
+more accidents.
+
+In this way, it is possible that in winter, for example, there will be more accidents 
+due to the weather, etc.
+
+It is also interesting to examine whether there has been a change in the nature of accidents 
+(accident between two vehicles / accident between person and vehicle, etc.) over time and whether 
+there is a change in the number of injured and killed over the years.
+
+In our opinion, the graph could have been improved by presenting a trend line instead of presenting 
+the average (by the way, a description could be added to the graph that explains that the horizontal 
+line is indeed the average). The advantage of this was that although when looking at the graph alone 
+it is not clear whether there has been an increase or decrease in the number of accidents over time, 
+the trend line would have made it possible to present a mathematical calculation that answers this.
+
+#### Figure 2:
+
+```{r fig.align="center", echo = FALSE, cache=TRUE}
+#plot(load.image("C://Users//menac//OneDrive//Desktop//Statistical Learning and Data Analysis//Lab #1//Lab1_Figure2.png"))
+
+plot(load.image("C:/Users/idank/OneDrive/R/Statistical learning and data analysis/Lab1/Lab1_Figure2.png"))
+```
+
+Graph B:
+The graph describes the total number of accidents related to minors and adults in cities belonging to 
+the Haifa metropolitan area. In addition, there is a sectoral association for each of the cities shown. 
+The graph attempts to answer two questions: Is there a relationship between the number of minors 
+injured in accidents and the number of adults. In addition, it asks whether there is a connection 
+between the sector of the city and the ratio between the minors who are injured and the adults who 
+are injured in accidents.
+
+In our opinion the graph does indeed answer the questions presented. We see that there is a 
+positive relationship between the number of adults injured and the number of minors injured in 
+each of the cities. The trend line shown shows this clearly, since we see its sharp slope. In addition, 
+the second question is also answered because we see that on average the Arab cities are above the 
+trend line and the Jewish cities below it. We see that the Arab cities are in a different group from the 
+position of the Jewish cities in the graph, which indicates that the sector may indeed affect the ratio 
+between adults and minors injured by accidents.
+
+This graph raises questions about the composition of the population in Arab cities compared to 
+Jewish cities. Is the fact that there are more minors injured in relation to adults injured in Arab cities
+due to the fact that the composition of the population there is such that minors make up a larger 
+part of the total population in relation to Jewish cities? Or maybe does this indicate another factor 
+influencing the proportion of minors injured in accidents?
+
+In our opinion, the graph could have been improved by normalizing the cities in relation to the size 
+of their population. In this way we would also get an answer to the question of whether the Arab 
+cities have more accidents per capita than the Jewish cities or vice versa.
+
+## Question 2:  Reproducing these analyses
+
+As we were asked to reproduce the graphs only now they have been carried out on all settlements in Israel.
+
+#### Figure 1 Reproducing these analyses
+
+
+```{r, cache=TRUE, include=FALSE, echo = FALSE}
+#data <- data.frame(get(load("C:/Users/menac/OneDrive/Desktop/Statistical Learning and Data #Analysis/Lab 1/accidents_2013_2019.rdata")))
+
+data <- data.frame(get(load("C:/Users/idank/OneDrive/R/Statistical learning and data analysis/Lab1/accidents_2013_2019.rdata")))
+```
+
+```{r, cache=TRUE, include=FALSE,echo = FALSE}
+#creat a dict
+month <- c(אוקטובר="10", ינואר = "01", פברואר = "02", מרס="03", אפריל="04", מאי="05",יוני="06",יולי="07", אוגוסט="08", ספטמבר="09", נובמבר="11", דצמבר="12")
+```
+
+```{r,include=FALSE,cache=TRUE,echo = FALSE}
+data_ex2 <- data
+data_ex2 <- transform(data_ex2, Month = month[as.character(Month)]) # Apply transform function
+data_ex2 <- data.frame(table(data_ex2$Year, data_ex2$Month))
+colnames(data_ex2) <- c("Year", "Month", "Accidents")
+data_ex2$Date <- as.Date(paste(sep="-",data_ex2$Year, data_ex2$Month,"28"))
+
+# Since my time is currently a factor, I have to convert it to a date-time format!
+data_ex2$datetime <- ymd(data_ex2$Date)
+ 
+# Then you can create the xts necessary to use dygraph
+Accidents <- xts(x = data_ex2$Accidents
+,order.by = data_ex2$datetime)
+average <- rep(mean(data_ex2$Accidents
+))
+lungDeaths <- cbind(Accidents, average)
+
+# Finally the plot
+p2a <- dygraph(lungDeaths, main = "Accidents by Months in Israel between 2013-2019", 
+        ylab = "Accidents", xlab = "Months") %>% 
+        dyEvent("2016-10-28","oct 16", labelLoc = "bottom") %>%
+  dyOptions(labelsUTC = TRUE, fillGraph=TRUE, fillAlpha=0.1, drawGrid = FALSE) %>%
+  dyRangeSelector() %>%
+  dyCrosshair(direction = "vertical") %>%
+  dyHighlight(highlightCircleSize = 5, highlightSeriesBackgroundAlpha = 0.2, hideOnMouseOut = FALSE)  %>%
+  dyRoller(rollPeriod = 1) 
+```
+```{r fig.align="center", echo = FALSE,echo = FALSE}
+p2a
+```
+
+
+#### Figure 2
+
+```{r, cache=TRUE, include=FALSE,echo = FALSE}
+data_ex2.2 <- data
+data_ex2.2$Adults <- data_ex2.2$Injured_20_64 + data_ex2.2$Injured_65_plus
+
+data_ex2.2$Children <- data_ex2.2$Injured_0_19
+
+data_ex2.2.a <- aggregate(Children
+~ Town_Name, data = data_ex2.2, FUN = sum)
+data_ex2.2.a$Children <- data_ex2.2.a$Children/7
+data_ex2.2.b <- aggregate(Adults
+~ Town_Name, data = data_ex2.2, FUN = sum)
+data_ex2.2.b$Adults <- data_ex2.2.b$Adults/7
+
+# xls files
+#bycode2020 <- read_excel('bycode2020.xlsx')
+bycode2020 <- read_excel('C:/Users/idank/OneDrive/R/Statistical learning and data analysis/Lab1/bycode2020.xlsx')
+
+data_ex2.2 <- merge(data_ex2.2.a,data_ex2.2.b)
+data_ex2.2 <- merge(data_ex2.2, bycode2020)
+# mtcars dataset is natively available in R
+# head(mtcars)
+data_ex2.2 <- na.omit(data_ex2.2)
+alpha <- (sum(data_ex2.2$Children)/sum(data_ex2.2$Adults))
+
+p2b <- data_ex2.2 %>% filter(Children>20 & Adults>20) %>% ggplot(aes(x= Adults, y = Children, color=Town_Name_Pop)) +
+  xlab("Adults") + ylab("Minors") + ggtitle("Total accidents-related injuries per city minors vs. adults 2013-2019") + geom_point(size = 2) + geom_abline( slope = alpha) + theme(legend.position = "bottom")
+
+### geom_label_repel
+p2b <- p2b + 
+  geom_label_repel(aes(label = Town_Name),
+                  box.padding   = 0.35, 
+                  point.padding = 0.5,
+                  segment.color = 'grey50') + theme_bw() + theme_minimal() + theme(legend.key = element_rect(fill = "white", colour = "black")) +guides(col=guide_legend("Type City:"))       
+#geom_abline(data = alpha)
+```
+
+Only the cities with more than 20 cases of casualties in both adults and young people are listed, so that we can read the graph better, otherwise it would be full of dots (cities) that make it difficult to read.
+
+```{r fig.align="center", echo = FALSE}
+p2b
+```
+
+
+## Question 3: Freestyle analysis
+#### a
+```{r, include=FALSE,echo = FALSE}
+df <- data
+df <- transform(df, Month = month[as.character(Month)]) # Apply transform function
+df$Date <- as.Date(paste(sep="-","0000", df$Month,"28"))
+data_ex3 <- df
+data_ex3 <- aggregate(Injured_Total ~ Date+Day_Night, data = df, FUN = sum)
+
+ #Since my time is currently a factor, I have to convert it to a date-time format!
+data_ex3$datetime <- ymd(data_ex3$Date)
+
+ #Then you can create the xts necessary to use dygraph
+Injured_Total_Day <- data_ex3 %>% filter(Day_Night=="יום")
+Injured_Total_Day <- xts(x = Injured_Total_Day$Injured_Total,order.by = Injured_Total_Day$datetime)
+Injured_Total_Night <- data_ex3 %>% filter(Day_Night=="לילה")
+Injured_Total_Night <- xts(x = Injured_Total_Night$Injured_Total,order.by = Injured_Total_Night$datetime)
+average <- rep(mean(data_ex3$Injured_Total))
+lungDeaths <- cbind(Injured_Total_Day,Injured_Total_Night, average)
+
+mont <- c("0000-01-28","0000-02-28","0000-03-28","0000-04-28","0000-05-28","0000-06-28","0000-07-28","0000-08-28","0000-09-28","0000-10-28","0000-11-28","0000-12-28")
+name_mont <- c("Jan","Feb","Mar","Apr", "May", "Jun","Jul", "Aug","Sep","Oct","Nov","Dec")
+
+ #Finally the plot
+p3a <- dygraph(lungDeaths, main = "Total Injured by and Night Months between 2013-2019", 
+        ylab = "Total Injured", xlab = "Months") %>% 
+  dyOptions(labelsUTC = TRUE, fillGraph=TRUE, fillAlpha=0.1, drawGrid = FALSE) %>%
+  dyCrosshair(direction = "vertical") %>%
+         dyEvent(mont,name_mont, labelLoc = "bottom") %>%
+
+  dyHighlight(highlightCircleSize = 5, highlightSeriesBackgroundAlpha = 0.2, hideOnMouseOut = FALSE)  %>%
+  dyRoller(rollPeriod = 1)
+```
+```{r fig.align="center", echo = FALSE}
+p3a
+```
+
+In this graph they tried to trace the question, whether there is any trend between the different months are divided by day and by night.
+It has been found that those involved in accidents during the day are quantitatively more numerous than those at night in most months. In March, April, June the correlation is positive between day and night, in the other months of the year the correlation is negative (reverse).
+
+It can also be noted that in the winter months in Israel (defined from the end of December to the end of March) when the roads are more paved there are fewer accidents (although in our data it is until the end of May - maybe the winter season still exists), it can be explained that fewer people drive The night in winter because the pastimes limit the ability to cool down and are more likely to stay indoors and leads at least involved in road accidents.
+```{r,cache=TRUE, include=FALSE,echo = FALSE}
+#Region <- read_excel('Region.xlsx')
+Region <- read_excel('C:/Users/idank/OneDrive/R/Statistical learning and data analysis/Lab1/Region.xlsx')
+
+data_ex3.2 <- merge(data, Region) %>% select(Region, Severity, Injured_Total)
+data_ex3.2$Accident <- rep(1)
+data_ex3.2 <- aggregate(Accident ~ Region+Severity, data = data_ex3.2, FUN = sum)
+
+p3b <- ggplot(data_ex3.2, aes(fill= Severity, y=Accident, x=Region)) + ylab("Number of Accident") + ggtitle("Number of Accidents per Region and Severity 2013-2019") +
+    geom_bar(position="stack", stat="identity", width=.4, color = "black") + scale_fill_brewer(palette = 4, aesthetics = "fill", direction = 2) + 
+    xlab("Region") + guides(fill = guide_legend(title = "חומרת התאונה"))+ coord_flip() +
+    theme_bw() + theme_minimal()
+```
+#### b
+```{r fig.align="center", echo = FALSE}
+p3b
+```
+Implementation of data according to division into distribution areas in the country (according to division in the Central Bureau of Statistics).
+
+The idea of division by regions is an attempt to learn whether there are areas where there is a greater tendency for accidents and an attempt to learn general information about what may lead to more accidents taking place in these areas than in others.
+
+For his purposes, here it can be seen that the Tel Aviv area has the most accidents from the other areas, followed by Jerusalem, Haifa, South, North and the Judea and Samaria area respectively. It can be understood that there is a correlation between the density and the size of the population in the area and the number of casualties from road accidents.
+
+The graph has been improved by dividing the bars into types of accident severity, which we can see that the severity of the accident is not matched by the areas with the largest amount in terms of accidents, and that Haifa has the most fatal accidents while Jerusalem has the most serious accidents.
+
+It is possible to attribute the types of accidents to mixed areas by Jews and Arabs, especially in the mixed areas there is a higher amount both in percentage and quantity. Consistent with the graph (graph two in one question) which is divided by sector types.
+
+
+## Question 4:  Graphical Lineup
+
+We are interested in checking whether the number of accidents from month to month is continuous. To do this we will examine whether the sum of all accidents each month over the years 2013-2019 does indeed indicate such continuity or not. We will present a graph showing this amount in relation to another 20 graphs created by mixing the columns of the months. If indeed the truth data indicates that there is a continuity in the number of accidents from month to month, we expect to be able to distinguish the real graph from the other randomly simulated graphs.
+
+```{r,cache=TRUE,include=FALSE,echo = FALSE}
+data_ex4 <- data
+data_ex4 <- transform(data_ex4, Month = month[as.character(Month)])
+options <- c("01","02","03","04","05","06","07" , "08","09","10","11","12")
+real_freq <- data.frame(table(data_ex4$Month))
+column_name <- c("Month","Freq")
+colnames(real_freq) <- column_name
+```
+
+```{r fig.align="center", echo = FALSE,fig.width = 15,fig.height=20, cache=TRUE}
+set.seed(3)
+ggfun <- function(freq){
+  ggp <- freq %>% ggplot(aes(x=Month,y=Freq))+geom_bar(stat='identity', fill="skyblue", alpha=0.8)+coord_cartesian(ylim = c(2000, 2800))  +theme_light()+ xlab("Month") +ylab("Total accidents") +ggtitle("Total number of accidents between 2013-2019")+  theme(plot.title = element_text(hjust = 0.5,size = 10))
+  return(ggp)}
+
+lst <- list()
+assign(paste0("plot_", 1), ggfun(real_freq))
+lst <- append(lst,plot_1)
+
+for (i in 2:21){
+  samp <- transform( real_freq, Freq = sample(Freq))
+  assign(paste0("plot_", i), ggfun(samp))
+  }
+
+ggarrange(plot_9,plot_2,plot_3,plot_4,plot_5,plot_6,plot_7,plot_8,plot_1,plot_10,plot_11, plot_12,plot_13,plot_14,plot_15,plot_16,plot_17,plot_18,plot_19,plot_20,plot_21, labels = 1:21, ncol = 3, nrow = 7)
+```
+
+At this point we can say that the graph showing the real data is graph number 9. If we had only looked at it we might have come to the conclusion that there is indeed continuity in the number of accidents from month to month. We see that there is a consistent decrease in the number of accidents from July to December and in addition between May and July there are a similar number of accidents.
+However, when we compare the real graph to the other graphs, the findings we have seen are not exceptional at all. In other graphs we saw a consistent increase / decrease between several consecutive months and  we also saw additional cases where there were a similar number of accidents each month for several consecutive months.
+Therefore, in our opinion it is not possible to determine that there is a continuity in the number of accidents between a month and a month.
+
+
+## Question 5:  PCA
+
+```{r, cache=TRUE,include=FALSE,echo = FALSE}
+data_ex5 <- data
+acc_freq <- data.frame(table(data_ex5$Town_Name))
+town <- acc_freq[acc_freq$Freq > 150, ]$Var1
+town_data <- data_ex5[data_ex5$Town_Name %in% town, ] %>% select(7,8,9,11,12,13,19)
+town_sum <- aggregate(.~ Town_Name, town_data, sum)
+rownames(town_sum) <- town_sum$Town_Name
+town_sum <- town_sum # %>% select(2:7)
+names <- c("Beer-Sheva","Beit_Shemesh","Judeide-Maker","Haifa","Jerusalem","Ma'ale-Adumim","Naharia","Nesher","Akko","Kiryat-Ata","Kiryat-Bialik","Kiryat-Yam","Kiryat-Motzkin","Shfaram","Tel-Aviv-Jaffa")
+town_pca <- prcomp(town_sum[,2:7],scale = TRUE)
+```
+
+
+```{r fig.align="center", echo = FALSE}
+pc <- town_pca$x[,1:3]
+ggplot(data.frame(pc), aes(x=PC1,y=PC2,col=PC3))+geom_point(size=4)+geom_label_repel(label=rownames(pc),max.overlaps = 10^6,alpha=0.8)+theme_grey()+ xlab("PC1")+ ylab("PC2")+ ggtitle("The First 3 PCA Components of the types of Accidents")+ theme(plot.title = element_text(hjust = 0.5)) + guides(colour = guide_coloursteps()) 
+```
+
+Another option for viewing the first 3 Components of the types of Accidents.
+
+```{r include=FALSE,echo = FALSE}
+   options(rgl.useNULL = TRUE)
+   rgl::setupKnitr(autoprint = TRUE)
+```
+
+```{r fig.align="center", echo = FALSE}
+#webgl=TRUE
+plot3d(town_pca$x[,1:3],col=rainbow(1000),size = 5) + text3d(town_pca$x[,1:3],texts= names)
+
+bgplot3d({
+  plot.new()
+  title(main = "The First 3 PCA Components of the types of Accidents",line=0,cex.main =0.7)
+  # use here any other way you fancy to write your title
+})
+```
+
+It can be seen that by lowering a dimension by using the PCA principle. It can be said that PC1 serves as the total number of casualties in the city, since the cities with the number of casualties are the negative part and left to zero, the greater the number of casualties then the more left, compared to the small cities which are in the positive and large part.
+
+As for PC2, it can be said by looking at the data that it explains the age of the casualties. The higher it is, the higher the age of the casualties, for example in Jerusalem, the age of the lesions is younger compared to Tel Aviv. 
+The third component is more difficult to identify, it may be the component that explains the severity of the injury. This difficulty is even distinguished by a graph that does not clearly indicate a particular trend.
+
+In addition, it can be seen in general that the cities of Tel Aviv, Jerusalem, Haifa and Beer- Sheva are significantly different from the other cities and the patterns of accidents in them are unique.
+
+

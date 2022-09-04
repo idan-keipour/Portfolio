@@ -1,0 +1,295 @@
+---
+title: "lab 4"
+
+author: "Menachem Sokolik (314696972) and Idan Keipour (315355537)"
+date: '2022-06-09'
+output:
+  html_document:
+      css: mystyle.css
+      rmarkdown::html_document: null
+      code_folding: hide
+      theme: journal
+      toc: yes
+      toc_depth: 2
+      df_print: paged
+      includes: null
+      after_body: footer.html
+  pdf_document:
+      toc: yes
+      toc_depth: '2'
+---
+
+```{r echo=FALSE,message=FALSE,warning=FALSE}
+# linrarys for function 
+library(tidyverse)
+library(ggplot2)
+library(openxlsx)
+library("readxl")
+library(randomForest)
+library(ggpubr)
+library(caret)
+library(praznik)
+```
+
+```{r fig.align="center", cache=TRUE}
+# Data downloaded from https://www.kaggle.com/datasets/zalando-research/fashionmnist
+
+# Add file names 
+train_dat_file = "fashion-mnist_train.csv" 
+test_dat_file = "fashion-mnist_test.csv"
+
+# Read data
+fashion_mnist = read.csv(train_dat_file)
+fashion_mnist_te = read.csv(test_dat_file)
+
+
+# Keep only pullovers (2) and coats (4)
+library(dplyr)
+
+pull_and_coats = fashion_mnist %>% filter( label %in% c(2,4))
+pull_and_coats_te = fashion_mnist_te %>% filter( label %in% c(2,4))
+
+# Viewing function. 
+view_image = function(k, dat = pull_and_coats[,-1],col_map = grey.colors(256)){
+  im = dat[k,] 
+  image(matrix(as.numeric(im), nc = 28)[,28:1]/256, col = col_map)
+}
+
+train_response = ifelse(factor(pull_and_coats[,1],) == 4, 1, 0)
+train_feat = pull_and_coats[,-1]
+
+test_response = ifelse(factor(pull_and_coats_te[,1],) == 4, 1, 0)
+test_feat = pull_and_coats_te[,-1]
+```
+
+# Question 1: Classification Lab.
+
+### 1. compare two methods, each from a different classifier family.
+
+we'll consider the coats (number 4) as 1 or "Success"/"Yes", where pullover (number 2) would be 0 or "Fail"/"No".
+
+Since our data set includes two types of images. Accordingly, we have a binary forecasting problem. In linear regression, there are at least two reasons not to perform classification using a regression method: (a) a regression method cannot accommodate a qualitative response with more than two classes; (b) a regression method will not provide meaningful estimates of Pr(Y \|X), even with just two classes. logistic regression, which is well-suited for the case of a binary qualitative response, therefor we'll do logistic Regression (base on ISLR2 book) .
+
+1.  Logistic Regression.
+
+    -   first we'll do pca - an [unsupervised](https://www.statology.org/supervised-vs-unsupervised-learning/) machine learning technique that seeks to find principal components -- linear combinations of the original predictors -- that explain a large portion of the variation in a dataset.
+
+    -   The goal of PCA is to explain most of the variability in a dataset with fewer variables than the original dataset. (base on <https://www.statology.org/principal-components-analysis-in-r/>)
+
+    ```{r fig.align="center", cache=TRUE}
+    # Calculate the Principal Components
+    train_feat_pca <- prcomp(train_feat, scale = TRUE)
+
+    # calculate total variance explained by each principal component
+    train_feat_pca_var_explained <- train_feat_pca$sdev^2 / sum(train_feat_pca$sdev^2)
+    pca_var_exlained <- data.frame("n" = 1:length(cumsum(train_feat_pca_var_explained)), "Variance Explained" = cumsum(train_feat_pca_var_explained))
+
+    # plot
+    p_1 <- qplot(c(1:15), train_feat_pca_var_explained[1:15]) + 
+      geom_line() + 
+      xlab("Principal Component") + 
+      ylab("Variance Explained") +
+      ggtitle("A. Scree Plot") +
+      ylim(0, 1) + theme_minimal()
+
+
+    p_2 <- ggplot(data = pca_var_exlained, aes(x = n, y = Variance.Explained)) +
+      geom_line(size = 1) +
+      ggtitle("B. Cumulative Proportion of Variance Explained") +
+      geom_point(inherit.aes = F, aes(x=100, y = Variance.Explained[100]), col = "red", size = 3) +
+      scale_x_continuous(name = "Principal Component", limits = c(0, 200), breaks = c(0,50,100,150,200)) +
+      scale_y_continuous(name = "Variance Proportion", limits = c(0.3,1), breaks = seq(0,1,0.1)) +
+      theme(panel.grid.minor = element_blank()) + theme_minimal()
+
+    ggarrange(p_1, p_2, ncol = 1, nrow = 2)
+    ```
+
+    -   *100 Principal Components explain about 90% of total variance. So by using PCA, the dimensions are reduces from 784 to 100.* (based on <http://www.sthda.com/english/articles/36-classification-methods-essentials/151-logistic-regression-essentials-in-r/>)
+
+        The accuracy level of GLM model is:
+
+    ```{r fig.align="center", cache=TRUE}
+    #set the ddata
+    train <- as.data.frame(train_feat_pca$x) %>% select(PC1:PC100)
+    test <- as.data.frame(predict(train_feat_pca, newdata = test_feat)) %>% select(PC1:PC100)
+    train$label <- train_response
+    test$label <- test_response
+
+    # Fit the model
+    logistic_model <- glm(label ~ ., data = train, family = binomial)
+
+    # Make predictions
+    probabilities <- logistic_model %>% predict(test, type = "response")
+    predicted.classes <- ifelse(probabilities > 0.5, 1, 0)
+
+    # Model accuracy
+    mean(predicted.classes == test_response)
+    ```
+
+2.  Random Forest.
+
+    Random Forest is suitable for situations **when we have a large dataset, and interpretability is not a major concern**. Decision trees are much easier to interpret and understand. Since a random forest combines multiple decision trees, it becomes more difficult to interpret.
+
+    The accuracy level of RF model is:
+
+    ```{r fig.align="center", cache=TRUE}
+    set.seed(123)
+    RF_model <- randomForest(as.factor(label) ~ ., data = train)
+    pred <- predict(RF_model, newdata = test)
+    cm <- table(as.factor(test_response), pred)
+    mean(pred == test_response)
+    ```
+
+It is easy to see that the RF model brings a higher level of accuracy than the GLM model.
+
+### 2. Write your own function that calculates (a) the confusion matrix (b) the precision and (c) the recall.
+
+Matrix calculate by $C \in \mathbb{R}^{2\times3}$
+
+Accuracy calculate by $\frac{\sum_{i=1}^{2}{C_{ii}}}{\sum_{i=1}^{2}{\sum_{j=1}^{2}{C_{ij}}}}$ .
+
+Recall calculate by $\frac{\sum_i{\mathbb{1}_{\{\hat{y}_i=1\}}}}{\sum_i{\mathbb{1}_{\{y_i=1\}}}}=\frac{TP}{P}$.
+
+```{r fig.align="center", cache=TRUE}
+my_calculates_function <- function(predict, real){
+  predict <- as.numeric(as.character(predict))
+  real <- as.numeric(as.character(real))
+  
+  confusion_matrix <- data.frame(matrix(0, 2, 3))
+  colnames(confusion_matrix) <- c("0", "1", "class.error")
+  row.names(confusion_matrix) <- c("0", "1")
+  for (i in 1:length(real)) { 
+    if(real[i] == predict[i]) {
+      ifelse(real[i] == 1, confusion_matrix[2,2] <- confusion_matrix[2,2]+1,  confusion_matrix[1,1] <-confusion_matrix[1,1] + 1)}
+    if(real[i] != predict[i]) {
+      ifelse(real[i] == 1, confusion_matrix[2,1] <- confusion_matrix[2,1] + 1 ,  confusion_matrix[1,2] <- confusion_matrix[1,2] +  1)}}
+  confusion_matrix[1,3] <- confusion_matrix[1,2]/sum(confusion_matrix[1,1:2])
+  confusion_matrix[2,3] <- confusion_matrix[2,1]/sum(confusion_matrix[2,1:2])
+  
+  Accuracy <- sum(ifelse(predict == real, 1, 0))/length(real)
+
+  Recall <- confusion_matrix[2,2]/sum(confusion_matrix[2,1:2])
+  return(list("confusion matrix" = confusion_matrix, "Accuracy" = round(Accuracy,4), "Recall" = Recall))}
+
+
+glm_calculates <-  my_calculates_function(predicted.classes, as.factor(test_response))
+RF_calculates <- my_calculates_function(pred, as.factor(test_response))
+```
+
+```{r fig.align="center", cache=TRUE}
+writeLines("td, th { padding : 6px } th { background-color : brown ; color : white; border : 1px solid white; } td { color : brown ; border : 1px solid brown }", con = "mystyle.css")
+
+knitr::kable(glm_calculates$`confusion matrix`, caption = 'glm confusion matrix')
+knitr::kable(RF_calculates$`confusion matrix`, caption = 'RF confusion matrix')
+
+knitr::kable(data.frame("Accuracy" = c(glm_calculates$Accuracy,RF_calculates$Accuracy),
+                      "Recall" = c(glm_calculates$Recall, RF_calculates$Recall), row.names = c("GLM", "RF")))
+```
+
+```{r fig.align="center", cache=TRUE}
+writeLines("td, th { padding : 6px } th { background-color : brown ; color : white; border : 1px solid white; } td { color : brown ; border : 1px solid brown }", con = "mystyle.css")
+
+predicted.classes_loristic_tr <- ifelse(predict(logistic_model, train, type = "response") > 0.5, 1, 0)
+predicted.classes_loristic_te <- ifelse(predict(logistic_model, test, type = "response") > 0.5, 1, 0)
+
+glm_calculates_train <-  my_calculates_function(predicted.classes_loristic_tr, as.factor(train$label))
+glm_calculates_test <-  my_calculates_function(predicted.classes_loristic_te, as.factor(test$label))
+
+
+predicted.classes_RF_tr <- predict(RF_model, train, type = "response")
+predicted.classes_RF_te <- predict(RF_model, test, type = "response")
+
+RF_calculates_train <-  my_calculates_function(predicted.classes_RF_tr, as.factor(train$label))
+RF_calculates_test <-  my_calculates_function(predicted.classes_RF_te, as.factor(test$label))
+
+
+knitr::kable(data.frame("Accuracy" = c(round(glm_calculates_train$Accuracy,4), round(glm_calculates_test$Accuracy,4),
+                                       round(RF_calculates_train$Accuracy,4),round(RF_calculates_test$Accuracy,4)),
+                      "Recall" = c(round(glm_calculates_train$Recall,4), round(glm_calculates_test$Recall,4), 
+                                   round(RF_calculates_train$Recall,4), round(RF_calculates_test$Recall,4)), 
+                      row.names = c("GLM train", "GLM test", "RF train", "RF test")))
+```
+
+**Overfitting:** \
+A statistical model is said to be overfitted when we train it with a lot of data. When a model gets trained with so much data, it starts learning from the noise and inaccurate data entries in our data set. Then the model does not categorize the data correctly, because of too many details and noise. The causes of overfitting are the non-parametric and non-linear methods because these types of machine learning algorithms have more freedom in building the model based on the dataset and therefore they can really build unrealistic models. A solution to avoid overfitting is using a linear algorithm if we have linear data or using the parameters like the maximal depth if we are using decision trees. In a nutshell, **Overfitting -- High variance and low bias.**
+
+Unsurprisingly, we got a high accuracy level of about 90%. We could get higher accuracy levels if we trained the model to all variables and not just on 100 variables (which we got using PCA), also, by cross validation. As stated as we increase the level of accuracy we will increase the variance and decrease the bias, alternatively as we decrease the accuracy we will increase the bias and decrease the variance. We need to find the right balance for us.
+
+It should be noted that in the RF model there is more overfitting than in the GLM model. Since the difference between prediction on a train set and a set set is about ten percent GLM where there is a difference on the other side. It is very possible that we would make the models without any PCA getting the opposite conclusion.
+
+### 3. Write your own function that draws a response operating curve (ROC).
+
+$Sensitvity = \frac{TP}{TP+FN}$, $Specificity = \frac{TN}{TN+FP}$
+
+```{r fig.align="center", cache=TRUE}
+roc_function = function(model="RF"){
+  thresh <- seq(0, 1, 0.1)
+  Specificity_Sensitvity <- matrix(nrow = length(seq(0, 1, 0.1)), ncol = 2)
+  if (model == 'glm'){
+    for (i in 1:length(seq(0, 1, 0.1))) {
+      log_model <- glm(label ~ ., data = train, family = binomial)
+      pred.class <- ifelse(predict(log_model, test, type = "response") > thresh[i], 1,0)
+      log_res <- my_calculates_function(pred.class, as.factor(test$label))$`confusion matrix`
+      Specificity_Sensitvity[i,1]  <- log_res[2,1]/(log_res[2,2] + log_res[2,1])
+      Specificity_Sensitvity[i,2] <- log_res[1,1]/(log_res[1,1] + log_res[1,2])}}
+  else{ 
+    for (i in 1:length(seq(0, 1, 0.1))) {
+      rf_model <- randomForest(as.factor(label) ~ ., data = train)
+      pred.class = ifelse(predict(rf_model, newdata = test, , type = "prob") < thresh[i], 1,0)
+      rf_res <- my_calculates_function(pred.class, as.factor(test$label))$`confusion matrix`
+      Specificity_Sensitvity[i,1]  <- rf_res[2,1]/(rf_res[2,2] + rf_res[2,1])
+      Specificity_Sensitvity[i,2] <- rf_res[1,1]/(rf_res[1,1] + rf_res[1,2])}}
+  df_Specificity_Sensitvity <- as.data.frame(Specificity_Sensitvity)
+  colnames(df_Specificity_Sensitvity) <- c( "Sensitvity", "Specificity")
+  return(df_Specificity_Sensitvity)}
+
+glm_roc <- roc_function('glm')
+RF_roc <- roc_function('RF')
+roc <- rbind(glm_roc, RF_roc)
+model <- rep(c('glm', 'RF'),times = c(11,11))
+roc <- cbind(roc, model)
+
+ggplot(roc, aes(y = Specificity, x = Sensitvity, color = model)) + geom_line() + geom_rug() + geom_abline(slope = 1, intercept = 0, color = "#C4961A", size = 1 ) + xlab("Sensitvity") + ylab("Specificity") + ggtitle("ROC curve") + theme_minimal()
+```
+
+It is easy to see that the RF model presents better data than the GLM model, since a curve is obtained that is closer to a 90-degree angle than the GLM model. In the ROC curve we want the curve to have a right angle.
+
+### 4. For one of your classifiers, display four examples that were classified incorrectly for each class.
+
+The wrong predictions based on glm model.
+
+```{r fig.align="center", cache=TRUE}
+image_wrong_predictions <- train[which((predicted.classes_loristic_tr != train$label)),]
+k <- row.names(image_wrong_predictions)
+par(mfrow = c(2,2))
+view_image(k[1])
+view_image(k[5])
+view_image(k[15])
+view_image(k[20])
+```
+
+The model was unable to correctly predict these four images. It can be seen that when it comes to a pullover we will observe in most cases that the garment will be more scribbled in the center (so also appears from the pictures attached to the exercise page) accordingly:
+
+-   A picture on the left shows us that it is a coat because it is not scribbled like the rest of the pullover, which made it difficult to identify in the model.
+
+-   At the right up we saw that it was a coat but was actually a pullover, The reason is for the same reason as mentioned above.
+
+-   At the right down we saw that it was a coat but was actually a pullover, The reason is for the same reason as mentioned above.
+
+-   On the bottom left we saw that it was a pullover, when in fact it was a coat. Probably what made it difficult for the model was the lack of sharpness that made it appear that in the center there are pullover characteristics as specified as examples in the center of the item.
+
+Examples of a coat and a pullover that the model predicted correctly respectively.
+
+```{r  fig.align="center", cache=TRUE}
+image_right_predictions <- train[which((predicted.classes_loristic_tr == train$label)),]
+k_r <- row.names(image_right_predictions)
+par(mfrow = c(1,2))
+view_image(k_r[5])
+view_image(k_r[800])
+```
+
+It can be seen that in the picture on the left we saw correctly that it is a pullover, also, the right one is a coat for the same reasons given above.
+
+### 5. Do you expect each of your fitted classifiers to work well on this image.
+
+Since we made the models based on the train data, in this data the two types of items both the coats and the pullover were when the background is dark and the item is light, so in the transition from a photo locator are saved after the image depth scale (colors) and image colors etc. Both models practiced on these vectors in order to identify in the future image images for which the parameters of the background and the brightness of the item are examined. These changes will lead to not so good predictions to say the least, in order to improve the model we will need to build data that are not interdependent, i.e. of different backgrounds, having different item colors. Which will lead to independence between different variables. If all the images had made the background clear and the item so, we would have achieved great accuracy for the required image, but we were found to ignore the real problem.

@@ -1,0 +1,348 @@
+---
+title: "Lab 2"
+author: "Menachem Sokolik (314696972) and Idan Keipour (315355537)"
+date: "null"
+output:
+  html_document:
+    rmarkdown::html_document: null
+    code_folding: hide
+    theme: journal
+    toc: yes
+    toc_depth: 2
+    df_print: paged
+    includes: null
+    after_body: footer.html
+  pdf_document:
+    toc: yes
+    toc_depth: '2'
+---
+
+```{r , include=FALSE, cache=F}
+# linrarys for function 
+library(imager)
+library(ggplot2) 
+library(reshape2) 
+library(plyr) 
+library(dplyr) 
+library(gplots)
+library(lattice)
+library(caret)
+library(dygraphs)
+library(xts)
+library(tidyverse)
+library(lubridate)
+library(readxl)
+library(hrbrthemes)
+library(ggplot2)
+library(ggrepel)
+library(ggpubr)
+library(rgl)
+library(mvtnorm)
+library(knitr)
+library(plotly)
+library(factoextra)
+library(fpc)
+library(NbClust)
+library(dendextend)
+library(openxlsx)
+library(corrplot)
+```
+
+# Question 1: Simulation Study.
+
+## 1.1 - Preparing code.
+
+exploring the behavior of running k-means using a simulated dataset.
+
+### A. simple the first $10$ coordinates of each $\mu_j$.
+
+```{r, cache=TRUE}
+set.seed(123) # Setting seed
+
+mu_i <- function(){mu_i <- rnorm(n = 10)
+  return(mu_i)}
+```
+
+### B. function that samples a datasets.
+
+```{r, cache=TRUE}
+my_simulated <- function(mu_1, mu_2, mu_3, p, sig){
+  res <-as.data.frame(matrix(0, 90, p))
+  for (i in seq(1:90)){
+    if (i < 21){
+      res[i,] = rmvnorm(n=1, mean = append(mu_1, rep(0, p-10)), sigma = diag(rep(sig, p)))} # Creating data from the multivariate normal distribution given some mean vector and/or covariance matrix.
+    if((i >20) & (i < 51)){
+      res[i,] = rmvnorm(n=1, mean = append(mu_2, rep(0, p-10)), sigma = diag(rep(sig, p)))}
+    if (i > 50){
+      res[i,] = rmvnorm(n=1, mean = append(mu_3, rep(0, p-10)), sigma = diag(rep(sig, p)))}}
+  return(as.matrix(res))}
+```
+
+### C. function that computes the accuracy of a given clustering result, based on the known components.
+
+```{r, cache=TRUE}
+
+# from tirgul 4
+# https://moodle2.cs.huji.ac.il/nu21/pluginfile.php/675182/mod_resource/content/0/Tirgul%20%234_%20Clustering.pdf - p 11-12
+
+accuracy <- function(sample_mnist, mnist_kmeans){
+  Mode <- function(x){
+  ux <- unique(x)
+  ux[which.max(tabulate(match(x, ux)))]}
+  
+true_label <- unname(unlist((sample_mnist)))
+cluster <- do.call(cbind, list(by(true_label, mnist_kmeans[["cluster"]], Mode)))
+cluster <- cbind(rownames(cluster), cluster)
+colnames(cluster) <- c("clus_center","cluster_label")
+acc_table <- data.frame(true_label = true_label, clus_center = mnist_kmeans[["cluster"]])
+acc_table <- merge(x = acc_table, y = cluster)
+return(mean(acc_table$true_label == acc_table$cluster_label))}
+```
+
+### D. The K-means algorithm that inputs a data-set and the set of true-labels, and outputs the accuracy and the run-time.
+
+```{r, cache=TRUE}
+pred <- function(data,true.labels){
+  b.time <- Sys.time()
+  kmeans.re <- kmeans(data, 3)
+  accuracy <- accuracy(true.labels, kmeans.re)
+  t.time <- Sys.time() - b.time
+  return(c(accuracy, t.time))}
+```
+
+## 1.2 - Analysis of experiments.
+
+### A. The average accuracy and the standard-error.
+
+```{r cache=TRUE}
+data.accuracy <- data.frame(p.dimensions = NA, sigma = NA, average.accuracy = NA, std.dev = NA) # crating a datafrme of accuracy
+data.time <- data.frame(p.dimensions = NA, sigma = NA, time = NA) #crating a dataframe for time
+
+for (i in c(10, 20, 50)){ # p
+  for (j in c(1,9,25,49)){ # sigma
+    temp = c()
+    for (k in seq(80)){ # B = 80
+      data <- my_simulated(mu_i(), mu_i(), mu_i(), i, j)
+      temp <- append(temp,pred(data, rep(c(1,2,3), times = c(20,30,40)))) # as give in the function
+      data.time <- rbind(data.time,c(i, j, temp[2]))}
+    data.accuracy <- rbind(data.accuracy,c(i, j,mean(temp[1]), sd(temp)/sqrt(80)))}}
+
+data.accuracy <- na.omit(data.accuracy) 
+rownames(data.accuracy) <- NULL # delete defolt row
+data.accuracy
+```
+
+#### a. Figure of Average accuracy rate
+
+```{r fig.align="center", echo = FALSE, cache=TRUE}
+# crating set to visual the risult useing ggplot
+plot.1 <- data.accuracy %>% ggplot(aes(x = sigma, y = average.accuracy, color = factor(p.dimensions))) +  ylab("Average accuracy rate") + xlab("sigma") + ggtitle("Average accuracy rate per p-dimensions & sigma") + geom_point() + theme_minimal() + theme(legend.position = "bottom") + guides(col = guide_legend("p-dimensions:")) 
+
+plot.1 + geom_line(aes(group = p.dimensions)) + geom_errorbar(aes(ymin = average.accuracy - std.dev, ymax = average.accuracy + std.dev), width = 0.2)
+```
+
+#### b. Figure of standard-error rate
+
+```{r fig.align="center", echo = FALSE, cache=TRUE}
+# crating set to visual the risult useing ggplot
+plot.se <- data.accuracy %>% ggplot(aes(x = sigma, y = std.dev, color = factor(p.dimensions))) + ylab("standard-error rate") + xlab("sigma") + ggtitle("Standard-error rate per p-dimensions & sigma") + geom_point() + theme_minimal() + theme(legend.position = "bottom") + guides(col = guide_legend("p-dimensions:")) 
+
+plot.se + geom_line(aes(group = p.dimensions))
+```
+
+### B. Figure describing run-time
+
+```{r fig.align="center", echo = FALSE, cache=TRUE}
+# crating set to visual the risult useing ggplot
+plot.time <- na.omit(data.time) %>% ggplot(aes(x = sigma, y = time, color = factor(p.dimensions))) + ylab("time rate") + xlab("sigma") + ggtitle("time rate per p dimensions & sigma") + geom_point() + theme_minimal() + theme(legend.position = "bottom") + guides(col = guide_legend("p-dimensions:")) 
+
+plot.time + geom_line(aes(group = p.dimensions))
+```
+
+### C. Briefly, discuss the effect of increasing $p$ and increasing $σ^2$ on accuracy and run-time.
+
+For figure in A:
+
+It can be seen that the level of accuracy decreases as the number of dimensions increases. Whereas as we add from years, the percentage of variables in them differs small, which makes it difficult to identify.
+
+It can be seen that as the variance increases, then the accuracy of the prediction decreases. Which is consistent with the difficulty that exists in the K-Means algorithm when the variance increases and the degree of accuracy is small. Therefore, it makes sense to get in the graph representing the standerd-error as obtained, since we get a relatively low accuracy so that most observations are close to each other, then as a result SD is low compared to the beginning where the observations are not necessarily close to each other.
+
+For figure in B:
+
+As we run the data over and over again, we get different times of run, run times are always less than 0.1 seconds. We expect to find that the larger the size of the matrix, the greater the run time. At some point they converge, since K-Means convergence (stopping) criterion when one or more exists
+
+-   no (or minimum) re-assignments of data points to different clusters, or
+
+-   no (or minimum) change of centroids, or
+
+-   minimum decrease in the loss / optimization function
+
+# Question 2: Comparing Covid-19 data and demographic data
+
+### A. Randomly choose a set of 20 cities described in the ISB (demographics) data sets. Identify these cities in the corona-virus data-sets.
+
+```{r cache=TRUE}
+# peparing the data set
+data.demographics <- read.delim("cbs_demographics.txt") # loding the data 
+rownames(data.demographics) <- data.demographics$village
+
+data.covid <- read.csv("covid_towns.csv",encoding="UTF-8")
+
+data.code <- read.xlsx("bycode2020.xlsx")   # form the internet CBS name.town and code.town
+
+colnames(data.code)<- c("City_Name","City_Code","village")
+data.covid <- merge(data.code, data.covid, by = "City_Name") %>% select(-c(City_Name, City_Code.x, City_Code.y, X))
+rownames(data.covid) <- data.covid$village
+```
+
+```{r cache=F}
+set.seed(123)  # Setting seed
+data.demographics.sample <- sample_n(data.demographics[data.demographics$village %in% data.covid$village,], 20) # Sample n rows from a table
+
+data.covid.sample <- data.covid[data.covid$village %in%  data.demographics.sample$village,] # get the citys that in data.demographics.sample
+```
+
+### B. Construct a hierarchical tree for the covid data. Decide on how to define distances between two cites so that the results are meaningful.
+
+Data standardization - First for Corona data I will divide them by the number of residents in each city so I will get according to the ratio of residents. For the second database I will use the scale function. The value of distance measures is intimately related to the scale on which measurements are made. Therefore, variables are often scaled. before measuring the inter-observation dissimilarities. This is particularly recommended when variables are measured in different scales, otherwise, the dissimilarity measures obtained will be severely affected. The goal is to make the variables comparable. Generally variables are scaled to have i) standard deviation one and ii) mean zero. The standardization of data is an approach widely used in the context of gene expression data analysis before clustering.
+
+```{r cache=F}
+# Normalize the data according to the size of the population 
+# sorting the data for work 
+data.covid.sample.scale <- data.covid.sample[order(data.covid.sample$village),]
+data.demographics.sample <- data.demographics.sample[order(data.demographics.sample$population),] 
+
+data.covid.sample.scale[c(2:100)] <- lapply(data.covid.sample.scale[c(2:100)], function(x) if(is.numeric(x)) c((x/data.demographics.sample$population)*10) else (x))
+data.covid.sample.scale <- data.covid.sample.scale %>% select(-village) %>% select(-c(101:105))
+
+# by scale
+data.demographics.sample.scale <- data.demographics.sample
+data.demographics.sample.scale[c(2:15)] <- lapply(data.demographics.sample.scale[c(2:15)], function(x) c(scale(x)))
+```
+
+Canberra distance -- a measure of similarity and dissimilarity between groups. Canberra distance examines the sum of series of a fraction differences between coordinates of a pair of objects. This distance is very sensitive to a small change when both coordinates are nearest to zero.
+
+We chose it because we normalized our columns in the demographic data, and since we divided the population size, our vectors are zero-mean, with most of the values ​​themselves close to zero. This made the Canberra distance suitable for the following sections, after reading and comparing all kinds of distances we have.
+
+```{r fig.align="center", echo = FALSE,cache=F}
+data.covid.sample.dist <- dist(data.covid.sample.scale, method = "canberra")
+hclust.tree <- hclust(data.covid.sample.dist, method = "complete")
+covid.dendrogram <- as.dendrogram(hclust.tree)
+covid.dendrogram <- covid.dendrogram %>% set("labels_cex", 0.5) %>% set("branches_k_color", value = c(1,2,5,3,6), k = 5) %>% set("labels_col", c(1,2,5,3,6), k = 5)
+plot(covid.dendrogram, main = "Twenty random cities - Covid 19 Dendogram",  cex.main = .75,   font.main = 3, col.main = "darkgreen") 
+```
+
+### C. Construct a hierarchical tree for the demographic data.
+
+```{r fig.align="center", echo = FALSE,cache=F}
+data.demographics.sample.dist <- dist(data.demographics.sample.scale[c(1:15)], method = "canberra")
+hclust.tree <- hclust(data.demographics.sample.dist, method = "complete")
+demographics.dendrogram <- as.dendrogram(hclust.tree)
+demographics.dendrogram <- demographics.dendrogram %>% set("labels_cex", 0.5) %>% set("branches_k_color", c(1,2,5,3,6), k = 5) %>% set("labels_col", value = c(1,2,5,3,6), k = 5)
+plot(demographics.dendrogram, main = "Twenty random cities - Demographics Dendogram",  cex.main = .75,   font.main = 3, col.main = "darkgreen") 
+```
+
+### D. Compare the two hierarchies. A tanglegram plot gives two dendrogram (with the same set of labels), one facing the other, and having their labels connected by lines. Tanglegram can be used for visually comparing two methods of Hierarchical clustering
+
+```{r fig.align="center", echo = FALSE,cache=F}
+dl <- dendlist("demo dendrogram" = demographics.dendrogram, "covid dendrogram" = covid.dendrogram)
+#tanglegram(dl, sort = TRUE, common_subtrees_color_branches = F)
+dl %>% untangle(method = "step2side") %>% 
+   tanglegram(common_subtrees_color_branches = TRUE)
+title(cex.main = .5) 
+# used and learnd from https://cran.r-project.org/web/packages/dendextend/vignettes/dendextend.html#comparing-two-dendrograms in moodle
+```
+
+Comping between the two graphs - It can be seen that the division into clusters of $K = 5$ does exist in the two graphs, but the division of cities is different in the clusters except for Haifa, but it can be noted that a group of cities migrated together to another cluster (as expected by the fact that the databases are different). The second between the two graphs, first the scale of the graphs is not the same between the years (it is very possible that abundant from knowing that the data file we made normalized by population and not by using the scale function). And as mentioned above the cities were rearranged in clusters.
+
+More technical way to compare the deprograms we used corr plot.
+
+```{r fig.align="center", echo = FALSE, cache=F}
+# from https://cran.r-project.org/web/packages/dendextend/vignettes/dendextend.html#comparing-two-dendrograms
+cor.dendlist(dl)
+corrplot(cor.dendlist(dl), "pie", "lower") 
+```
+
+According to corr plot it can be seen that there is a positive correlation between two databases of the 20 cities. This means that there is a similarity between the division into clusters between the years by the parameters of the demographic.
+
+### E. Choose a similarity score for the two trees
+
+Calculate Baker's Gamma correlation coefficient for two trees. It is calculated by taking two items, and see what is the heighst possible level of $k$ for which the two item still belongs to the same tree. That k is returned, and the same is done for these two items for the second tree. There are $n\choose2$ combinations of such pairs of items from the items in the tree, and all of these numbers are calculated for each of the two trees. Then, these two sets of numbers (a set for the items in each tree) are paired according to the pairs of items compared, and a spearman correlation is calculated. The value can range between $[-1, 1]$. With near $0$ values meaning that the two trees are not statistically similar. For exact p-value one should result to a permutation test. One such option will be to permute over the labels of one tree many times, and calculating the distriubtion under the null hypothesis.
+
+```{r cache=F}
+Baker_Gamma <- cor_bakers_gamma(covid.dendrogram,demographics.dendrogram) # computing BK Index of two trees 
+cat("The baker's score is:", round(Baker_Gamma,4))
+```
+
+In our baker's score `r round(Baker_Gamma,4)` Thus there is a great resemblance between the two.
+
+The Bk plot is the calculation of Fowlkes-Mallows index for a series of k cuts for two dendrograms. A Bk plot is simply a scatter plot of Bk versus k. This plot helps in identifiying the similarity between two dendrograms in different levels of $k$
+
+From Wikipedia: Fowlkes-Mallows index (see references) is an external evaluation method that is used to determine the similarity between two clusterings (clusters obtained after a clustering algorithm). This measure of similarity could be either between two hierarchical clusterings or a clustering and a benchmark classification. A higher the value for the Fowlkes-Mallows index indicates a greater similarity between the clusters and the benchmark classifications.
+
+The default Bk plot comes with a line with dots (type "b") of the Bk values. Also with a fragmented (lty=2) line (of the same color) of the expected Bk line under $H_0$, And a solid red line of the upper critical Bk values for rejection
+
+```{r fig.align="center", echo = FALSE,cache=F}
+# from https://cran.r-project.org/web/packages/dendextend/vignettes/dendextend.html#comparing-two-dendrograms
+Bk_plot(covid.dendrogram, demographics.dendrogram, main = "Bk plot")
+```
+
+### G. Display the results as a histogram approximating the null-distribution scores.
+
+The null hypothesis is that the $H_0 :  Bk -Gamma = 0$
+
+and the alternative is that the $H_1 :  Bk -Gamma \neq  0$
+
+if we gonna get that $P-value < 0.05$ it's means that the trees are similar to each other since statically the value that we got **is not probable** under the *null hypothesis*.
+
+```{r fig.align="center", echo = FALSE,cache=T}
+my_distribution <- function(dend.ONE, BK, iteration=1000){
+  set.seed(123)
+  mix.tree <- dend.ONE #mixing tree
+  temp <- c()
+  for (i in 1:iteration) {
+    mix <- sample.dendrogram(dend = mix.tree)
+    temp <- append(temp,cor_bakers_gamma(dend.ONE, mix))}
+  cat("p-value is:",round(sum(BK < temp)/iteration, 4))
+  # Plotting our results:
+  hist(temp, col = "peachpuff", # column color
+ border = "black",
+ ylim = c(0,9),
+ prob = TRUE,
+ xlab = "", 
+ lwd = 2, main = "displaying the results as a histogram approximating the null-distribution scores", cex.main = 1)
+  lines(density(temp), # density plot
+ lwd = 2, # thickness of line
+ col = "chocolate3")
+  abline(v = 0, col = 5, lty = 2 , lwd = 2)
+  abline(v = BK, col = 4, lwd = 2)
+  abline(v = round(sum(BK < temp)/iteration, 4), col = 3, lwd = 2, lty = 3)
+  legend("topright",inset = 0.02,legend =  c("Original Index", "Zero", "P-value"), col = c(4, 5, 3), lty = c(1,2,3), box.lty = 0)
+  title(sub = paste("N =", iteration,  "  One sided p-value:", round(sum(BK < temp)/iteration, 4)))
+  }
+
+my_distribution(demographics.dendrogram, Baker_Gamma)
+```
+
+
+### H. Explain your results in light of the null hypothesis you were testing
+
+It can be seen as we expected following BK-plot that for K = 5 (since the point is higher than the red line shown in the graph.), We will reject the null hypothesis with our P-value of 0.045 The implication is that the clusters are similar under the above cut and We can learned that there is no significant correlation between demographic data and covid 19 data. 
+
+# Question 3: App
+
+In another file we have attached the application that runs the k-means algorithm we built and displays the first two PCA components of the 200 genes with the highest variance.
+We added an option to determine the number of iterations of the algorithm, and in addition to determine the number of clusters of the data.
+Also, to allow examination of the algorithm's progress by the number of iterations we allowed the user to set seed. This way the initial centres that the algorithm randomizes will remain the same and it will be possible to observe how the clusters change as the algorithm "runs" more times.
+Attached are some screenshots from the app:
+
+```{r fig.align="center", echo = FALSE, cache=TRUE, fig.dim = c(10, 8)}
+library(imager)
+plot(load.image("1.jpeg"))
+plot(load.image("2.jpeg"))
+plot(load.image("3.jpeg"))
+```
+
+
+
+i used the webset https://cran.r-project.org/web/packages/dendextend/vignettes/dendextend.html#comparing-two-dendrograms in this lab.

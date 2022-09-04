@@ -1,0 +1,371 @@
+---
+title: "Final assignment"
+author: "315355537"
+date: '12/07/2022'
+output:
+  html_document:
+      css: mystyle.css
+      rmarkdown::html_document: null
+      code_folding: hide
+      theme: journal
+      toc: yes
+      toc_depth: 2
+      df_print: paged
+      includes: null
+      after_body: footer.html
+  pdf_document:
+      toc: yes
+      toc_depth: '2'
+---
+
+```{r, echo=FALSE,message=FALSE,warning=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(openxlsx)
+library(readxl)
+library(glmnet) 
+library(GGally)
+library(caret) 
+library(tree)
+library(randomForest)
+library(naivebayes)
+library(ggthemes)
+
+writeLines("td, th { padding : 6px } th { background-color : darkcyan ; color : white; border : 1px solid white; } td { color : darkcyan ; border : 1px solid darkcyan }", con = "mystyle.css")
+
+```
+
+## Question 1
+
+#### A)
+
+By increasing the number of neighbors (K) in the K nearest neighbors algorithm, the variance of the estimator will decrease. This is because the larger the K, the smoother (and less Stairs shape) the prediction function will be. For smooth function the variance is smaller and therefor in our case increasing K will reduce the variance.
+
+#### B) 
+
+By increasing the number of neighbors (K) in the K nearest neighbors algorithm, the bias of the estimator will increase. Like I said before, in this algorithm the larger the K is, the smoother (and less Stairs shape) the prediction function will be. Smooth prediction functions may have a small variance, but they have a higher bias. For instance, if K = 1 the error for the training data would be 0. therefor in our case, increasing K will increase the bias of the estimator.
+
+#### C)
+
+In the KNN algorithm there is a risk in increasing the number of training observations (n) as this may lead to overfitting. You can think of it this way - the more observations there are, the closer the K observations are to me. Thus, the meaning of a situation where n will be large but K will remain small will be similar to the meaning of l overfitting, i.e. high variance (and low bias as I will explain in the next section).
+
+#### D)
+
+As mentioned above, in the KNN model where n is very large we compare each observation to other observations that are very similar to it. Thus, the bias will be low since the distance between the near observations will not be greater than the distance between more distant observations. That is, when n tends to infinity, the bias will tend to 0 (similar to the situation where k = 1 where the bias will be 0)
+
+## Question 2
+
+```{r}
+#Load the data
+train <- read.csv("tree_train_set.csv")
+y <- train$tree_type
+train <- subset(train, select = -c(X))
+
+float_vars <- cbind(tree_type=train$tree_type ,train[1:10]) #not binary variables
+```
+
+
+I am interested in examining how distance from water and fire affects the prevalence we find in each of the tree species. To do this I will check the distribution of the (horizontal) distance from the nearest fire point and compare it to the distribution of the (horizontal) distance from the nearest water surface. 
+
+```{r}
+for_2 <- cbind(tree_type=float_vars$tree_type,Hor_dist_to_water=float_vars$Hor_dist_to_water,Hor_dist_to_fire=float_vars$Hor_dist_to_fire)
+for_2 <- data.frame(for_2)
+for_2$tree_type <- factor(for_2$tree_type)
+
+tree_name <- for_2$tree_type
+levels(tree_name) <- c("Spruce","Lodgepole Pine")
+tree_name = as.character(tree_name)
+for_2$tree_type <- tree_name
+
+ggpairs(for_2, columns = 2:3, ggplot2::aes(colour=tree_type,alpha=0.3),columnLabels = c("Horizontal distance to water", "Horizontal distance to fire"))
+
+```
+
+It can be seen that the Lodgepole Pine is on average a greater distance from both water sources and wildfire ignition points than the Spruce tree. This indicates that compared to a Spruce tree, the Lodgepole Pine is a drier tree. Therefor, on the one hand it needs less water and on the other hand it cannot survive in places close to wildfire ignition points. In contrast, it can be concluded that although the spruce tree is closer to fire sources, the fact that it is also closer to water sources helps it survive in these conditions. That is, because the Spruce is a less dry tree it is able to be closer to wildfires.
+
+
+## Question 3
+
+#### A)
+
+First I will build a function that creates a Naive-Bayes object, which contains the density for each of the float variables (for each of the values of the explained variable), the relative frequency for the categorical variables, the Prior and a list of the categorical variables.
+I will then use this function to create predictions for new samples.
+Note that for convenience, to calculate the best prediction I will summarize the log of probabilities and not multiply the usual probabilities. This will help us because these are probabilities of a large number of explanatory variables so that their multiplication will be extremely small.
+
+Finally I would like to check the quality of the predictions that the model predicts. To do this I will train the model using 16,000 observations, and the average accuracy (when a correct classification we get 1 and for an incorrect classification 0) I will calculate using the remaining 4,000 observations.
+
+```{r}
+train <- subset(train, select = -c(tree_type))
+
+
+estimate_naive_bayes = function(train_x, train_y, categorical_vars ) {
+  #count how many not categorical variables 
+  n_float <- sum(categorical_vars == FALSE) 
+  #save the float variables in different df
+  float_x <- cbind(train_x[1:n_float],y = train_y)
+  #save the categorical variables in different df
+  cat_x <- cbind(train_x[(n_float+1):length(train_x)],y=train_y) 
+  #get the mean and sd for the float variables
+  float_parameters <- float_x %>% group_by(y) %>% summarise(across(everything(), list(mean,sd))) %>% select(-1)
+  #get the frequency of the categorical variables
+  cat_parameters <- cat_x %>% group_by(y) %>% summarise(across(everything(), list(mean))) %>% select(-1)
+  #get the frequency of every explained variable and save it as prior
+  prior <- c(sum(train_y==1)/length(train_y),sum(train_y==2)/length(train_y))
+  
+  naive_bayes_obj <- list(float_parameters,cat_parameters,prior,categorical_vars)
+  return(naive_bayes_obj)}
+
+
+# A function that calculates the density of a normal distribution
+geos_sample <- function(x,mu,sd){  return((1/(sqrt(2*pi*(sd^2))))*exp(-0.5*(((x-mu)/sd)^2)))}
+
+
+predict_naive_bayes = function (naive_bayes_obj, test_x) {
+  float_obj <- data.frame(naive_bayes_obj[1])
+  cat_obj <- data.frame(naive_bayes_obj[2])
+  prior <- data.frame(naive_bayes_obj[3])
+  categorical_vars <- data.frame(naive_bayes_obj[4])
+  
+  n_float <- sum(categorical_vars == FALSE)
+  #separate the float and categorical variables from the new samples:
+  test_x_float <- test_x[1:n_float]
+  test_x_cat <- test_x[(n_float+1):length(test_x)]
+
+  preds <- c()
+  #every row j is a sample for which we are trying to find a prediction
+  for (j in seq(nrow(test_x))) {
+    log_sum1 <- log(prior[1,])
+    log_sum2 <- log(prior[2,])
+    
+    #summarize the probability of the float variables
+    for (i in seq(length(test_x_float))) {
+      p1 <- geos_sample(test_x_float[j,i],float_obj[2,(2*i-1)],float_obj[2,(2*i)])
+      p2 <- geos_sample(test_x_float[j,i],float_obj[2,(2*i-1)],float_obj[2,(2*i)])
+      log_sum1 <- log_sum1 + log(p1)
+      log_sum2 <- log_sum2 + log(p2)}
+    
+    #summarize the probability of the categorical variables
+    log_sum1 <- log_sum1 + sum(log(abs(test_x_cat[j,]-(1-cat_obj[1,]))))
+    log_sum2 <- log_sum2 + sum(log(abs(test_x_cat[j,]-(1-cat_obj[2,]))))
+    
+    #choose the prediction with the highest probability
+    if(log_sum1 > log_sum2) {preds <- c(preds,1)
+    } else{ preds <- c(preds,2)}}
+  return(preds)}
+
+
+#Calculating naive_bayes estimates using the functions I built and checking the accuracy of the model
+
+all_vars_bn_obj = estimate_naive_bayes(train[1:16000,], y[1:16000], c(rep(FALSE,10) , rep(TRUE,44)))
+
+test_x <- train[16001:20000,]
+accuracy <- mean(predict_naive_bayes(all_vars_bn_obj,test_x)==y[16001:20000])
+
+cat(paste0("The accuracy of the naive-bayes estimate obtained using the functions I built is: ",accuracy))
+
+```
+
+#### B)
+
+First I will create a function that calculates the average error using k fold cross validation. I will then use this function to calculate the error for each of the possible combinations of 2 variables out of all the explanatory variables. I will present the two variables for which the error was the lowest.
+
+Note that I did not use the function from a previous section because its runtime is higher than the runtime of the function in the R packages. Since there are over 1300 possible combinations the running time may be significant higher.
+
+I also used kernel density because in this case it produced a higher accuracy than Gaussian density.
+
+```{r}
+
+#function calculates cross-validation
+cv_func <- function(data,y,nrFolds){
+  # generate array containing fold-number for each sample (row)
+  folds <- rep_len(1:nrFolds, nrow(data))
+  #to shuffle the data
+  folds <- sample(folds, nrow(data))
+  
+  error <- 0
+  for(k in 1:nrFolds) {
+    # the split of the data:
+    fold <- which(folds == k)
+    data_train <- data.frame(data[-fold,])
+    train_y <- y[-fold]
+    data_test <- data.frame(data[fold,])
+    test_y <- y[fold]
+    #calculate the model, prediction and error
+    model <- naive_bayes(train_y~. ,data = data_train)
+    preds <- predict(model,data_test)
+    error <- error + mean(preds!=test_y)}
+  return(error/nrFolds)}
+
+
+cv_train <- subset(train, select = -c(wilderness_1,wilderness_2))
+combinations <- combn(colnames(cv_train),2) #All options for combining the explanatory variables
+
+min_err <- Inf #set the error to infinity in order to find the minimal error in the next step
+for (comb in 1:choose(dim(cv_train)[2],2)) {
+  partial_data <- subset(cv_train,select = combinations[,comb])
+  err <- cv_func(partial_data,factor(y),10)
+  if(err<min_err){
+    min_err <- err 
+    best_vars <- colnames(partial_data)}}
+
+best <- cbind(best_vars[1],best_vars[2],min_err)
+colnames(best) <- c("Var 1","Var 2", "Error")
+knitr::kable(best, format = "html",align = "c")
+```
+
+It turns out that the elevation (height) and the distance to the nearest road are the most important explanatory variables in the model. 
+
+In my opinion this is due to the fact that probably one of the types of trees is in a more isolated place than the other tree.
+Therefore, information about a tree that is in particularly high place and is far from a road, i.e. from civilization can impart a good prediction.
+
+
+#### C)
+
+I will estimate a Naive-Bayes model using all the explanatory variables. I would like to check if there is a difference between the success of the model on the samples from wilderness_1 and wilderness_2
+
+```{r}
+set.seed(100)
+sample <- sort(sample.int(n = nrow(train), size = floor(nrow(train)*0.8), replace = F))
+train_x <- train[sample, ] #keeps 80% from the original dataset as the training dataset
+test_x  <- train[-sample, ] #keeps 20% from the original dataset as the validation dataset
+train_y <- y[sample] #the tree type of the training dataset
+test_y <- y[-sample] #the tree type of the validation dataset
+
+nb_model <- naive_bayes(factor(train_y)~. ,data = train_x, usekernel = T)
+nb_pred <- predict(nb_model,test_x)
+nb_acc <- mean(test_y==nb_pred)
+
+x_y_pred <- cbind(test_x,real_y=test_y,pred=nb_pred)
+wild1 <- subset(x_y_pred, wilderness_1 == 1)
+wild2 <- subset(x_y_pred, wilderness_2 == 1)
+wild1_acc <- mean(wild1$real_y == wild1$pred)
+wild2_acc <- mean(wild2$real_y == wild2$pred)
+
+acc <- cbind(nb_acc,wild1_acc,wild2_acc) 
+colnames(acc) <- c("Overall accuracy","Accuracy for wilderness_1","Accuracy for wilderness_2")
+
+knitr::kable(acc, format = "html",align = "c")
+
+```
+
+It can be seen that the accuracy obtained for wilderness_2 is significantly lower (about 10%) than the accuracy for wilderness_1.
+To explain what I think the difference is due to, I will look at the following graph:
+
+```{r}
+df <- data.frame (Variable  = c("wilderness_1","wilderness_2"),
+                  Frequency = c(sum(train$wilderness_1), sum(train$wilderness_2)))
+
+ggplot(data=df, aes(x=Variable, y=Frequency)) +
+  geom_bar(stat="identity",fill="steelblue",alpha=0.8,width = 0.7)+ylim(0,20000)+geom_text(aes(label=Frequency), vjust=1.6, color="white", size=4)+ labs(title = "The frequency of data variables",subtitle = " ")+ theme_economist_white()+theme(plot.title = element_text(size=12,hjust = 0.5),plot.subtitle = element_text(size=12,hjust = 0.5),
+                                  axis.title.x = element_text(size = 12)
+                                  ,axis.title.y = element_text(size = 12))
+
+```
+
+That is, it can be seen that the number of observations in the data belonging to wilderness 1 is much larger than the number of observations belonging to wilderness 2. Thus, it is not surprising that when we have a low number of observations- the predictions are less good. In models in general, but  particular in machine learning models the quality of the result is strongly related to the sample size. We can see here that when the sample is not large enough - the quality of the prediction is not sufficient.
+
+
+## Question 4
+
+#### A)
+
+I would like to test the accuracy of three of the models we have studied: Random Forest, Logistic Regression and Naive Bayes.
+To do this I will divide the training data into two parts: one part through which I will train the various models, and in the second part I will examine the quality of the prediction it provides.
+
+```{r}
+set.seed(100)
+sample <- sort(sample.int(n = nrow(train), size = floor(nrow(train)*0.8), replace = F))
+train_x <- train[sample, ] #keeps 80% from the original dataset as the training dataset
+test_x  <- train[-sample, ] #keeps 20% from the original dataset as the validation dataset
+train_y <- y[sample] #the tree type of the training dataset
+test_y <- y[-sample] #the tree type of the validation dataset
+
+```
+
+Calculate the Random Forest model:
+
+```{r}
+rf_model <- randomForest(factor(train_y)~. ,data = train_x, mtry = ncol(train_x), importance = TRUE) 
+rf_pred <- predict(rf_model,test_x)
+rf_acc <- mean(test_y==rf_pred)
+
+```
+
+Calculate the Logistic Regression model:
+
+```{r message=FALSE,warning=FALSE}
+lr_model <- glm(factor(train_y)~. ,data = train_x, family="binomial")
+lr_prob <- predict(lr_model,test_x,type = "response")
+lr_pred <- ifelse(lr_prob > 0.5, 2, 1)
+lr_acc <- mean(test_y==lr_pred)
+
+```
+
+Calculate the Naive Bayes model:
+
+```{r}
+nb_model <- naive_bayes(factor(train_y)~. ,data = train_x, usekernel = T)
+nb_pred <- predict(nb_model,test_x)
+nb_acc <- mean(test_y==nb_pred)
+
+```
+
+summary:
+
+```{r}
+res <- cbind(rf_acc,lr_acc,nb_acc)
+colnames(res) <- c("Random Forest","Logistic Regression","Naive Bayes")
+rownames(res) <- "Accuracy"
+
+knitr::kable(res, format = "html",align = "c")
+
+```
+  
+
+
+It can be seen that Random Forest yielded the highest accuracy of the three models.
+Hence, I chose to use it to calculate the predictions for the test data.
+
+Random Forest that I chose to use is an algorithm that uses a lot of decision trees to achieve better predictions (hence its name is a "forest" since it is made up of a lot of trees). The use of a large number of decision trees makes it possible to achieve  an estimate with low variance but without compromising the bias of the model. In general, the model computes an average across all trees and thus ultimately creates as an output a single prediction for each new observation.
+
+I decided to add a "mtry" parameter to the model which set the number of variables randomly sampled as candidates at each split. I set this parameter for the number of explanatory variables.
+
+#### B) 
+
+The following code uses the Random Forest model previously calculated to calculate predictions for test data.
+It will save this data in a csv file as required.
+
+```{r}
+tree_test_feat <- read.csv("tree_test_new_feat.csv")
+tree_test_feat <- subset(tree_test_feat, select = -c(X))
+pred_test <- as.numeric(predict(rf_model,tree_test_feat))
+write.csv(pred_test,file="315355537.csv",row.names=F)
+
+```
+
+#### C)
+
+As mentioned, I have already calculated the expected accuracy from the Random Forest prediction (at which point I decided which model to use).
+
+
+```{r}
+cat(paste0("The expected accuracy of the prediction is: ",rf_acc))
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
