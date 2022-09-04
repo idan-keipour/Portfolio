@@ -1,0 +1,1 @@
+This folder contains various projects that I carried out as part of my studies for a bachelor's degree in economics, statistics and data science.
